@@ -37,3 +37,8 @@ class Grpah:
         with open(filename + ".json", "w") as json_f:
             json.dumps(self.graph_matrix, json_f)
 
+    # Creates graph json
+    def load_graph_from_json(self, json_path):
+        with open(json_path,) as f:
+            self.graph_matrix = json.loads(f)
+
