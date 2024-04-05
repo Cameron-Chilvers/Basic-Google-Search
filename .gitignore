@@ -18,5 +18,5 @@
 .ionide
 
 ### Removing the html files ###
-.tar
-.tar.gz
+*.tar
+*.tar.gz
