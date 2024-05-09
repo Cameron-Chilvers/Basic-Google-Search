@@ -31,7 +31,7 @@ class Graph:
         if id in self.graph_matrix:
             return self.graph_matrix[id]
         
-        return set()
+        return {}
 
     # Dumping as json to make it portable
     def dump_graph(self, filename):

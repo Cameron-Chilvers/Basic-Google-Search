@@ -12,6 +12,8 @@ def create_graph():
     with open(r"nodes-links\links.txt", "r") as f:
         links = f.readlines()
 
+    link_tuples = []
+
     for val in links:
         # Cleaning the values
         val = val.strip()
@@ -21,6 +23,8 @@ def create_graph():
         link_split[0] = int(link_split[0])
         link_split[1] = int(link_split[1])
 
+        val_tuple = (link_split[0], link_split[1])
+
         # Adding to the graph
         graph.add_to_graph(link_split[0])
         graph.add_to_graph(link_split[1])
@@ -29,10 +33,14 @@ def create_graph():
         graph.add_edge(link_split[0], link_split[1])
         
         #print(graph.graph_matrix)
+        link_tuples.append(val_tuple)
 
     graph.dump_graph(r"json_dumps\graph\graph")
 
-#create_graph()
+    return link_tuples
+
+
+print(create_graph())
 
 # Loading grpah from the json file
 def load_graph():
@@ -42,7 +50,10 @@ def load_graph():
 
     return graph
 
-# graph = load_graph()
+graph = load_graph()
+
+print(graph.get_out_edges("0"))
+
 # print(graph.graph_matrix)
 
 # Loop through hosts to create the nodes
@@ -82,8 +93,7 @@ def dump_nodes(node_list):
         json.dump(node_dict, f, indent=5)
         
 
-dump_nodes(node_list)
-
+#dump_nodes(node_list)
 
 def read_nodes():
     for file in glob.glob(NODE_PATH + "*.json"):
@@ -94,3 +104,4 @@ def read_nodes():
         print(node.print_node())
 
 #read_nodes()
+
