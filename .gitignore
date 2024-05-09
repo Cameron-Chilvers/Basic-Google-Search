@@ -20,3 +20,7 @@
 ### Removing the html files ###
 *.tar
 *.tar.gz
+
+
+### Removing python files
+*.pyc
