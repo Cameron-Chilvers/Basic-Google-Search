@@ -21,26 +21,28 @@ class Node:
     def get_link_address(self):
         return self.link_address
 
+
+    # DONT USE
     def dump_node(self, path):
         # id of node in json and inside is the metadata
         with open(path + str(self.id)+ ".json", "w") as f:
-            json.dump(self.create_prop_dict(), f)
+            json.dump(self.create_prop_dict(), f, indent=5)
 
     def create_prop_dict(self):
         properties = dict()
         properties['id'] = self.id
         properties['link_address'] = self.link_address
-        properties['html'] = self.html
+        #properties['html'] = self.html
 
         return properties
     
-    def read_from_json(self, json_path):
+    def load_from_json(self, json_path):
         with open(json_path, 'r') as f:
             data = json.load(f) 
         
         self.link_address = data['link_address']
         self.id = data['id']
-        self.html = data['html']
+        #self.html = data['html']
     
     def print_node(self):
         print("Node ID: %s\nNode Link %s\n" % (self.get_id(), self.get_link_address()))
