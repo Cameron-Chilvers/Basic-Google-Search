@@ -5,10 +5,14 @@ class Node:
     def __init__(self):
         self.id = None
         self.link_address = None
+        self.html = None
 
     def initalise_node(self, id, link_address):
         self.id = id
         self.link_address = link_address
+
+    def add_html(self, html):
+        self.html = html
 
     # returning id
     def get_id(self):
@@ -26,6 +30,7 @@ class Node:
         properties = dict()
         properties['id'] = self.id
         properties['link_address'] = self.link_address
+        properties['html'] = self.html
 
         return properties
     
@@ -35,6 +40,7 @@ class Node:
         
         self.link_address = data['link_address']
         self.id = data['id']
+        self.html = data['html']
     
     def print_node(self):
         print("Node ID: %s\nNode Link %s\n" % (self.get_id(), self.get_link_address()))
