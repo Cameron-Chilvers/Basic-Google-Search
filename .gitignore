@@ -24,3 +24,7 @@
 
 ### Removing python files
 *.pyc
+
+
+## Removing json files
+*.json
