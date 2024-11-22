@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<h1>Simple Google Prototype</h1>
+
+<div>
+    <form action="/send_input_phrase" method="POST" style="width: 100%;">
+        <div style="float: left; width: 40%;">
+          
+            <input style="width: 80%;" placeholder="Enter Search Phrase Here" id="search_phrase" name="search_phrase"/>
+            <button type="submit" value="Submit">Search</button>
+        </div>
+
+        <div style="float: left; width: 30%;">
+            <input type="radio" id="strict_text_search" name="text_search" value="strict_text_search" checked="checked">
+            <label for="strict_text_search">Strict Text Search</label><br>
+
+            <input type="radio" id="similar_text_search" name="text_search" value="similar_text_search">
+            <label for="similar_text_search">Similar Text Search</label><br>
+            
+            <input type="radio" id="vectorisation_search" name="text_search" value="vectorisation_search">
+            <label for="vectorisation_search">Vectorisation Search</label><br>
+
+            <input type="checkbox" id="page_rank" name="page_rank" value=1>
+            <label for="page_rank">Use Page Rank Sorting?</label><br>
+
+            <input type="checkbox" id="vectorisation_rank" name="embedding" value=1>
+            <label for="vectorisation_rank">Use Vectorisation Ranking?</label>
+        </div>
+    </form>
+</div>
+
+
+{% if stats %}
+
+    <div style="margin-top: 125px;">
+        <h3>Previous Options</h3>
+        {% for item in prev_search %}
+            <p>{{item[0]}}{{item[1]}}</p>
+        {% endfor %}
+    </div>
+    <div style="margin-top: 50px;">
+        <h3>Statistics</h3>
+        {% for stat in stats %}
+            <p>{{stat[0]}}{{stat[1]}}</p>
+        {% endfor %}
+    </div>
+    <div style="margin-top: 50px;">
+        <!-- List here -->
+        <h3>Results:</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Link</th>
+                    <th>Page Rank</th>
+                    <th>Vectorisation Closeness score</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in list__ %}
+                    <tr>
+
+                        <td>{{item.id}}</td>
+                        <td>{{item.title}}</td>
+                        <td>{{item.link_address}}</td>
+                        <td>{{item.page_rank}}</td>
+                        {% if 'score' in item%}
+                        <td>{{item.score}}</td>
+                        {% else %}
+                        <td>Not Calculated</td>
+                        {% endif %}
+                    </tr>
+
+                {% endfor %}
+            </tbody>
+        </table>        
+    </div>
+{% endif %}
+</body>
+</html>

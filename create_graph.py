@@ -8,9 +8,11 @@ import concurrent.futures
 import pandas as pd
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from time import time
-import dask.dataframe as dd
+from langchain_community.embeddings import HuggingFaceBgeEmbeddings
 import ijson
 from neo4j_connection import Neo4jConnection
+from bs4 import BeautifulSoup
+import html
 
 NODE_PATH = "json_dumps\\nodes\\"
 
@@ -131,7 +133,7 @@ def save_batch_to_json(batch, batch_index):
     with open(batch_path, 'w', encoding='utf-8') as f:
         json.dump(batch_dict, f, indent=5)  # Save only successful entries
 
-def add_html_to_node(batch_size=500):
+def add_html_to_node(batch_size=1000):
     file_paths = glob.glob(HTML_PATH_HTMLS + "*.html")
     num_batches = len(file_paths) // batch_size + (1 if len(file_paths) % batch_size else 0)
 
@@ -181,22 +183,6 @@ def find_word_in_files(search_word, file_path):
     
     print("time taken " + str(time() - start))
 ######################### Single Search #########################
-
-
-######################### Single Search DASK #########################
-def find_word_sinlge_dask(directory):
-    for index, file in enumerate(glob.glob(directory + "*.json")):
-        print(file)
-        try:
-            dask_frame = dd.read_json(file, lines = True)
-
-            print(dask_frame.describe())    
-        except Exception as e:
-            print(f"Error processing file {file}: {str(e)}")
-
-        #print(dataframe.head())
-######################### Single Search DASK #########################
-
 
 ######################### Search Funcitons #########################
 def search_in_file(file, search_word):
@@ -328,10 +314,9 @@ def add_to_neo4j(filepath, conn):
 
 
 ######################### ADD NEO4j BATCH Funcitons #########################
-def add_to_neo4j_batch(filepath, conn, batch_size=100):
+def add_to_neo4j_batch(filepath, conn: Neo4jConnection, batch_size=100):
     start = time()
     files = glob.glob(filepath + "*.json")
-    failed_ids = []
 
     for file_path in files:
         file_name = os.path.splitext(os.path.basename(file_path))[0].replace("html_batch_", "")
@@ -350,7 +335,6 @@ def add_to_neo4j_batch(filepath, conn, batch_size=100):
                     conn.add_batch(batch)
                 except Exception as e:
                     print(f"Failed to insert batch from file {file_name}: {e}")
-                    failed_ids.extend([d['file_name'] for d in batch])
                 batch = []
 
         # Insert any remaining records in the last batch
@@ -359,15 +343,134 @@ def add_to_neo4j_batch(filepath, conn, batch_size=100):
                 conn.add_batch(batch)
             except Exception as e:
                 print(f"Failed to insert final batch from file {file_name}: {e}")
-                failed_ids.extend([d['file_name'] for d in batch])
-
-    if failed_ids:
-        with open(r"failed.txt", 'a') as f:
-            f.write("\n\nFAILED FOR FILE: " + file_name + "\n")
-            f.writelines(failed_ids)
 
     print("Total time taken: {:.2f} seconds".format(time() - start))
 ######################### ADD NEO4j BATCH Funcitons #########################
+
+######################### ADD NEO4j PROPERTY BATCH Funcitons #########################
+def add_prop_neo4j_batch(filepath, conn: Neo4jConnection, batch_size=500):
+    batch = []
+
+    with open(filepath, 'r') as f:
+        for line in f:
+            val = line.strip().split()
+
+            # Prepare batches of records to send to Neo4j in a single transaction
+            batch.append(val)
+
+            if len(batch) >= batch_size:
+                print(batch[-1][0])
+                try:
+                    conn.add_batch_prop(batch)
+                except Exception as e:
+                    print(f"Failed to insert batch from file {val[0]}: {e}")
+                batch = []
+       
+    # Insert any remaining records in the last batch
+    if batch:
+        try:
+            conn.add_batch_prop(batch)
+        except Exception as e:
+            print(f"Failed to insert final batch {batch}: {e}")
+
+######################### ADD NEO4j PROPERTY BATCH Funcitons #########################
+
+
+######################### CLEANING HTML Funcitons #########################
+def clean_html(html_content):
+    # Parse the HTML content
+    soup = BeautifulSoup(html_content, 'html.parser')
+
+    # Remove script and style elements
+    for script in soup(["script", "style"]):
+        script.decompose()
+
+    # Get text from the cleaned soup
+    text = soup.get_text()
+
+    # Optionally, remove leading and trailing spaces on each line
+    lines = (line.strip() for line in text.splitlines())
+    # Break multi-headlines into a line each
+    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+    # Drop blank lines
+    text = '\n'.join(chunk for chunk in chunks if chunk)
+
+    return text
+######################### CLEANING HTML Funcitons #########################
+
+######################### Getting the page rank dataframe Funcitons #########################
+def get_page_rank_df():
+    with open(r"json_dumps\page_rank\output_all_items.json", 'r') as f:
+        data = json.load(f)
+
+    data = pd.read_json(r"json_dumps\page_rank\output_all_items.json", orient='records')
+
+    data.set_index("id", inplace=True)
+    data.sort_index(inplace=True)
+    return data
+######################### Getting the page rank dataframe Funcitons #########################
+
+
+######################### Creating Embedding Funcitons #########################
+def embedd_text(text, model: HuggingFaceBgeEmbeddings):
+    
+    query_result = model.embed_query(text)
+
+    return query_result
+######################### Creating Embedding Funcitons #########################
+
+
+def embedd_html_batch(filepath, conn: Neo4jConnection, model: HuggingFaceBgeEmbeddings, batch_size=100):
+    start = time()
+    files = glob.glob(filepath + "*.json")
+    page_rank_df = get_page_rank_df()
+
+    for file_path in files:
+        file_name = os.path.splitext(os.path.basename(file_path))[0].replace("html_batch_", "")
+        
+        print(f"Processing {file_name}")
+
+        with open(file_path, 'r') as f:
+            data = json.load(f)
+
+        # Prepare batches of records to send to Neo4j in a single transaction
+        batch = []
+        for key, val in data.items():
+            try:
+                page_rank_value = page_rank_df.loc[int(key), 'pagerank']
+            except:
+                page_rank_value = 0
+
+            try:
+                cleaned_title = html.unescape(val['title'])
+            except:
+                cleaned_title = val['title']
+
+            try:    
+                cleaned_html = clean_html(val['html'])
+                embedding = embedd_text(cleaned_html, hf)
+            except:
+                embedding = []
+
+            batch.append((key, page_rank_value, embedding, cleaned_html, cleaned_title))
+
+            if len(batch) >= batch_size:
+                try:
+                    conn.add_batch_embed_page(batch)
+                except Exception as e:
+                    print(f"Failed to insert batch from file {file_name}: {e}")
+                batch = []
+            
+        # Insert any remaining records in the last batch
+        if batch:
+            try:
+                conn.add_batch_embed_page(batch)
+            except Exception as e:
+                print(f"Failed to insert final batch from file {file_name}: {e}")
+
+    print("Total time taken: {:.2f} seconds".format(time() - start))
+
+
 
 
 
@@ -404,7 +507,7 @@ if __name__ == "__main__":
     # json_path = os.path.join(DATABASE_PATH, "html_title.json")
     # json_dataframe.to_json(json_path, orient='records', lines=True)
 
-    find_word_sinlge_dask(r"json_dumps\line_del\\")
+    # find_word_sinlge_dask(r"json_dumps\line_del\\")
     #df_array_of_objects = dd.read_json(r'D:\UNi\UTS\network\NetworkAssigment3\json_dumps\page_rank\pagerank_results_with_details.json')
 
     #print(df_array_of_objects.head())
@@ -412,16 +515,31 @@ if __name__ == "__main__":
     #convert_to_line_del(r"json_dumps\html\\")
 
     # NEO4j Stuff
-    # uri = "bolt://localhost:7687"
-    # user = "neo4j"
-    # password = "Password"
-    # conn = Neo4jConnection(uri, user, password)
+    uri = "bolt://localhost:7687"
+    user = "neo4j"
+    password = "Password"
+    conn = Neo4jConnection(uri, user, password)
 
-    # add_to_neo4j_batch(r"json_dumps\html\\", conn)
+    # Creating the model
+    model_name = "BAAI/bge-small-en-v1.5"
+    model_kwargs = {"device": "cuda"}
+    encode_kwargs = {"normalize_embeddings": True} # this means is is prepped for cosine similarity
+    hf = HuggingFaceBgeEmbeddings(
+        model_name=model_name, model_kwargs=model_kwargs, encode_kwargs=encode_kwargs
+    )
 
-    # #add_to_neo4j(r"json_dumps\html\\", conn)
-    # conn.close()
-    #find_word_in_files(["beach"], "json_dumps\\pairs\\")
+
+    embedd_html_batch(r"json_dumps\html\\", conn, hf)
+
+    #add_to_neo4j_batch(r"json_dumps\html\\", conn)
+    
+    #add_prop_neo4j_batch(r"nodes-links\hosts.txt", conn)
+    
+    #add_to_neo4j(r"json_dumps\html\\", conn)    
+    
+    
+    conn.close()
+    # find_word_in_files(["beach"], r"json_dumps\page_rank\pagerank_results_with_info.json")
 
     #find_word_in_files_multi("beach | ball", filepath="json_dumps\\html\\", num_threads=8)
 
@@ -434,7 +552,3 @@ if __name__ == "__main__":
 
 
     # Cpher to use for search
-
-#     MATCH (n:Website)
-#     WHERE n.title =~ '(?i).*beach.*'
-#     RETURN n
