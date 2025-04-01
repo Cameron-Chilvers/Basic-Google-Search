@@ -12,7 +12,8 @@ class Neo4jConnection:
             print("Failed to create the driver:", e)
 
     def close(self):
-        self.__driver.close()
+        if self.__driver:
+            self.__driver.close()
 
     def add_dict(self, dict_data):
         with self.__driver.session() as session:
@@ -41,3 +42,40 @@ class Neo4jConnection:
         for record in batch:
             query = "MERGE (n:Website {id: $id, title: $title, html: $html}) RETURN n"
             tx.run(query, id=record['file_name'], title=record['title'], html=record['html'])
+
+
+    def add_batch_prop(self, batch):
+         with self.__driver.session() as session:
+            session.write_transaction(self.__add_prop_nodes_batch, batch)
+
+    @staticmethod
+    def __add_prop_nodes_batch(tx, batch):
+        query = """
+            UNWIND $batch AS line
+            MATCH (n:Website {id: line[0]})
+            SET n.link_address = line[1]
+            RETURN n
+            """
+        tx.run(query, batch=batch)
+
+    def add_batch_embed_page(self, batch):
+        with self.__driver.session() as session:
+            session.write_transaction(self.__add_embed_page_batch, batch)
+
+    @staticmethod
+    def __add_embed_page_batch(tx, batch):
+        query = """
+            UNWIND $batch AS line
+            MATCH (n:Website {id: line[0]})
+            SET n.page_rank = line[1]
+            SET n.embedding = line[2]
+            SET n.cleaned_html = line[3]
+            SET n.title = line[4]
+            RETURN n
+            """
+        tx.run(query, batch=batch)
+
+    def execute_query(self, query, parameters=None):
+        with self.__driver.session() as session:
+            result = session.run(query, parameters)
+            return [record.data() for record in result]
